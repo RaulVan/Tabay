@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Tabay - 标签管理</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* 全屏页面的特殊样式 */
+        body {
+            width: 100%;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            padding: 24px;
+            min-height: calc(100vh - 40px);
+        }
+
+        .tabs-container {
+            max-height: none;
+            height: calc(100vh - 200px);
+            overflow-y: auto;
+        }
+
+        /* 网格布局 */
+        .grid-view .time-section-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 16px;
+        }
+
+        /* 视图切换按钮 */
+        .view-mode-controls {
+            margin-left: 16px;
+        }
+
+        /* 统计信息 */
+        .stats {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 24px;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .stat-item {
+            flex: 1;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+        }
+
+        /* 头部布局调整 */
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* 按钮样式优化 */
+        .header-actions .btn {
+            padding: 6px 12px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .header-actions .btn svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        /* 同步状态样式 */
+        .sync-status {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            color: #666;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: #f0f0f0;
+            margin-left: 8px;
+        }
+
+        .sync-status.syncing svg {
+            animation: rotate 1s linear infinite;
+        }
+
+        .sync-status.error {
+            color: #dc3545;
+            background: #fde8e8;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* 提示信息样式 */
+        .sync-tip {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-top">
+                <div class="header-left">
+                    <h1>Tabay</h1>
+                    <div class="view-controls">
+                        <div class="view-mode-controls">
+                            <button id="listView" class="btn view-btn active" title="列表视图">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M2 4h12v2H2V4zm0 3h12v2H2V7zm0 3h12v2H2v-2z"/>
+                                </svg>
+                            </button>
+                            <button id="gridView" class="btn view-btn" title="网格视图">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M1 4h4v4H1V4zm6 0h4v4H7V4zm6 0h4v4h-4V4zM1 10h4v4H1v-4zm6 0h4v4H7v-4zm6 0h4v4h-4v-4z"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <div class="header-actions">
+                        <button id="createGroup" class="btn" title="新建分组">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+                            </svg>
+                            新建分组
+                        </button>
+                        <button id="exportData" class="btn" title="导出数据备份">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                                <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+                            </svg>
+                            备份
+                        </button>
+                        <input type="file" id="importData" style="display: none" accept=".json">
+                        <button id="importButton" class="btn" title="导入数据备份">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                                <path d="M8.354 1.646a.5.5 0 0 0-.708 0l-3 3a.5.5 0 1 0 .708.708L7.5 3.207V11.5a.5.5 0 0 0 1 0V3.207l2.146 2.147a.5.5 0 0 0 .708-.708l-3-3z"/>
+                            </svg>
+                            恢复
+                        </button>
+                        <div class="sync-status" title="数据同步状态">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" id="syncIcon">
+                                <path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+                                <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+                            </svg>
+                            <span id="syncStatus">已同步</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="搜索标签页...">
+            </div>
+        </header>
+
+        <div class="stats">
+            <div class="stat-item">
+                <div class="stat-value" id="totalGroups">0</div>
+                <div class="stat-label">标签组</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="totalTabs">0</div>
+                <div class="stat-label">标签页</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="savedToday">0</div>
+                <div class="stat-label">今日保存</div>
+            </div>
+        </div>
+
+        <div class="tabs-container">
+            <div id="timeView" class="time-view active">
+                <!-- 时间视图将通过 JS 动态生成 -->
+            </div>
+        </div>
+    </div>
+    <script src="state.js"></script>
+    <script src="popup.js"></script>
+    <script src="fullpage.js"></script>
+</body>
+</html> 

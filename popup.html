@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Tabay</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* 修改打开按钮样式 */
+        #openFullPage {
+            padding: 6px 12px;
+            font-size: 13px;
+            color: var(--primary-color);
+            background: rgba(33, 150, 243, 0.1);
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        #openFullPage:hover {
+            background: rgba(33, 150, 243, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-top">
+                <h1>Tabay</h1>
+                <div class="header-actions">
+                    <button id="openFullPage" class="btn" title="在新标签页中打开">
+                        打开 Tabay
+                    </button>
+                </div>
+            </div>
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="搜索标签页...">
+            </div>
+        </header>
+
+        <div class="actions">
+            <button id="saveAllTabs" class="btn primary">保存所有标签页</button>
+            <button id="createGroup" class="btn">新建分组</button>
+        </div>
+
+        <div class="tabs-container">
+            <div id="timeView" class="time-view active">
+                <!-- 时间视图将通过 JS 动态生成 -->
+            </div>
+            <div id="groupView" class="group-view">
+                <div id="groupsList">
+                    <!-- 分组视图将通过 JS 动态生成 -->
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="state.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html> 

@@ -1,9 +1,120 @@
 :root {
+    /* 亮色主题变量 */
     --primary-color: #2196F3;
     --secondary-color: #FFC107;
     --text-color: #333;
     --bg-color: #fff;
     --border-color: #e0e0e0;
+    --hover-bg: #f5f5f5;
+    --group-header-bg: #f8f9fa;
+    --group-border: #e0e0e0;
+    --tab-hover-bg: #f0f0f0;
+    --icon-color: #666;
+    --meta-text-color: #666;
+    --notification-bg: rgba(0, 0, 0, 0.8);
+    --notification-text: #fff;
+    --stats-bg: #f8f9fa;
+}
+
+/* 暗色主题变量 */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --primary-color: #64B5F6;
+        --secondary-color: #FFD54F;
+        --text-color: #E0E0E0;
+        --bg-color: #1E1E1E;
+        --border-color: #424242;
+        --hover-bg: #2D2D2D;
+        --group-header-bg: #2D2D2D;
+        --group-border: #424242;
+        --tab-hover-bg: #383838;
+        --icon-color: #9E9E9E;
+        --meta-text-color: #9E9E9E;
+        --notification-bg: rgba(255, 255, 255, 0.1);
+        --notification-text: #E0E0E0;
+        --stats-bg: #2D2D2D;
+        --shadow-color: rgba(0, 0, 0, 0.3);
+    }
+
+    /* 暗色主题特定样式 */
+    body {
+        background-color: var(--bg-color);
+        color: var(--text-color);
+    }
+
+    .tab-group {
+        background-color: var(--bg-color);
+        border-color: var(--group-border);
+        box-shadow: 0 2px 8px var(--shadow-color);
+    }
+
+    .group-header-content {
+        background-color: var(--group-header-bg);
+        border-color: var(--border-color);
+    }
+
+    .tab-item {
+        border-color: var(--border-color);
+    }
+
+    .tab-item:hover {
+        background-color: var(--hover-bg);
+    }
+
+    .tab-title {
+        color: var(--text-color);
+    }
+
+    .tab-url {
+        color: var(--meta-text-color);
+    }
+
+    .btn:not(.primary):not(.danger) {
+        background-color: var(--hover-bg);
+        color: var(--text-color);
+    }
+
+    .search-box input {
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        border-color: var(--border-color);
+    }
+
+    .search-box input::placeholder {
+        color: var(--meta-text-color);
+    }
+
+    .sync-status {
+        background-color: var(--hover-bg);
+        color: var(--meta-text-color);
+    }
+
+    .stats {
+        background-color: var(--stats-bg);
+    }
+
+    .stat-label {
+        color: var(--meta-text-color);
+    }
+
+    /* 修改滚动条样式 */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: var(--bg-color);
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: var(--border-color);
+        border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: var(--meta-text-color);
+    }
 }
 
 * {
@@ -100,19 +211,19 @@ h1 {
     width: 100%;
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    background: white;
+    background: var(--bg-color);
     overflow: hidden;
     transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .tab-group:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 12px var(--shadow-color);
 }
 
 .group-header-content {
     padding: 12px 16px;
-    background: #f8f9fa;
+    background: var(--group-header-bg);
     border-bottom: 1px solid var(--border-color);
     display: flex;
     align-items: center;
@@ -126,7 +237,7 @@ h1 {
 
 .group-title {
     font-weight: 500;
-    color: #333;
+    color: var(--text-color);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -137,12 +248,12 @@ h1 {
 
 .group-meta {
     font-size: 12px;
-    color: #666;
+    color: var(--meta-text-color);
     margin-top: 2px;
 }
 
 .toggle-icon {
-    color: #666;
+    color: var(--meta-text-color);
     transition: transform 0.3s ease;
     display: flex;
     align-items: center;
@@ -167,12 +278,18 @@ h1 {
     display: flex;
     align-items: center;
     padding: 8px 16px;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--border-color);
     cursor: grab;
+    background-color: var(--bg-color);
+    transition: background-color 0.2s;
 }
 
 .tab-item:last-child {
     border-bottom: none;
+}
+
+.tab-item:hover {
+    background-color: var(--hover-bg);
 }
 
 .tab-favicon {
@@ -189,7 +306,7 @@ h1 {
 
 .tab-title {
     font-size: 14px;
-    color: #333;
+    color: var(--text-color);
     margin-bottom: 2px;
     white-space: nowrap;
     overflow: hidden;
@@ -198,7 +315,7 @@ h1 {
 
 .tab-url {
     font-size: 12px;
-    color: #666;
+    color: var(--meta-text-color);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -220,16 +337,21 @@ h1 {
     border: none;
     background: transparent;
     cursor: pointer;
-    color: #666;
+    color: var(--meta-text-color);
     border-radius: 4px;
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: all 0.2s;
 }
 
 .tab-actions button:hover {
-    background: #f0f0f0;
-    color: #333;
+    background: var(--hover-bg);
+    color: var(--primary-color);
+}
+
+.tab-actions button.delete-tab-btn:hover {
+    color: #d32f2f;
 }
 
 /* 分组选择器 */
@@ -438,15 +560,46 @@ h1 {
 /* 时间分类 */
 .time-section {
     margin-bottom: 24px;
+    position: relative;
 }
 
 .time-section-header {
     font-size: 14px;
     font-weight: 600;
     color: var(--text-color);
-    padding: 8px 0;
-    margin-bottom: 8px;
-    border-bottom: 2px solid var(--primary-color);
+    padding: 8px 16px;
+    margin-bottom: 16px;
+    position: relative;
+    background: var(--bg-color);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+}
+
+.time-section-header::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -8px;
+    height: 1px;
+    background: linear-gradient(90deg, 
+        var(--border-color) 0%, 
+        var(--border-color) 100%);
+    opacity: 0.3;
+}
+
+@media (prefers-color-scheme: dark) {
+    .time-section-header {
+        background: var(--hover-bg);
+    }
+
+    .time-section-header::after {
+        background: linear-gradient(90deg, 
+            rgba(100, 181, 246, 0.2) 0%, 
+            transparent 100%);
+        opacity: 0.5;
+    }
 }
 
 /* 加载状态 */
@@ -532,14 +685,14 @@ h1 {
     width: 100%;
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    background: white;
+    background: var(--bg-color);
     overflow: hidden;
     transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .tab-group:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 12px var(--shadow-color);
 }
 
 /* 标签列表 */
@@ -609,12 +762,12 @@ h1 {
 
 .tab-item.dragging {
     opacity: 0.5;
-    background: #f8f9fa;
+    background: var(--hover-bg);
 }
 
 .tab-group.drag-over {
     border: 2px dashed var(--primary-color);
-    background: rgba(33, 150, 243, 0.05);
+    background: var(--hover-bg);
 }
 
 .drag-feedback {
@@ -666,4 +819,11 @@ h1 {
 /* 拖拽时的标签样式 */
 .tab-item.drag-source {
     opacity: 0.5;
+}
+
+/* 空状态提示 */
+.empty-state {
+    text-align: center;
+    padding: 32px;
+    color: var(--meta-text-color);
 } 

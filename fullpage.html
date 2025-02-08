@@ -11,15 +11,15 @@
             height: 100vh;
             margin: 0;
             padding: 20px;
-            background-color: #f5f5f5;
+            background-color: var(--bg-color);
         }
 
         .container {
             max-width: 1200px;
             margin: 0 auto;
-            background: white;
+            background: var(--bg-color);
             border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
             padding: 24px;
             min-height: calc(100vh - 40px);
         }
@@ -48,8 +48,9 @@
             gap: 24px;
             margin-bottom: 24px;
             padding: 16px;
-            background: #f8f9fa;
+            background: var(--stats-bg);
             border-radius: 8px;
+            border: 1px solid var(--border-color);
         }
 
         .stat-item {
@@ -66,7 +67,7 @@
 
         .stat-label {
             font-size: 14px;
-            color: #666;
+            color: var(--meta-text-color);
         }
 
         /* 头部布局调整 */
@@ -94,18 +95,78 @@
             gap: 8px;
         }
 
-        /* 按钮样式优化 */
+        /* 功能按钮组 */
         .header-actions .btn {
             padding: 6px 12px;
             font-size: 13px;
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 6px;
+            color: var(--text-color);
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            transition: all 0.2s;
         }
 
-        .header-actions .btn svg {
+        /* 新建分组按钮 */
+        #createGroup {
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+            background: rgba(33, 150, 243, 0.1);
+        }
+
+        #createGroup:hover {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        #createGroup svg {
             width: 14px;
             height: 14px;
+        }
+
+        /* 备份和恢复按钮 */
+        #exportData, #importButton {
+            background: var(--bg-color);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+        }
+
+        #exportData:hover, #importButton:hover {
+            background: var(--hover-bg);
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        #exportData svg, #importButton svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        /* 暗色模式特定样式 */
+        @media (prefers-color-scheme: dark) {
+            #createGroup {
+                background: rgba(100, 181, 246, 0.1);
+            }
+
+            #createGroup:hover {
+                background: var(--primary-color);
+            }
+
+            #exportData:hover, #importButton:hover {
+                background: rgba(100, 181, 246, 0.1);
+            }
+        }
+
+        /* 按钮图标通用样式 */
+        .header-actions .btn svg {
+            flex-shrink: 0;
+        }
+
+        /* 按钮文字样式 */
+        .header-actions .btn span {
+            font-weight: 500;
         }
 
         /* 同步状态样式 */
@@ -114,11 +175,12 @@
             align-items: center;
             gap: 4px;
             font-size: 12px;
-            color: #666;
+            color: var(--meta-text-color);
             padding: 4px 8px;
             border-radius: 4px;
-            background: #f0f0f0;
+            background: var(--hover-bg);
             margin-left: 8px;
+            border: 1px solid var(--border-color);
         }
 
         .sync-status.syncing svg {
@@ -127,7 +189,55 @@
 
         .sync-status.error {
             color: #dc3545;
-            background: #fde8e8;
+            background: rgba(220, 53, 69, 0.1);
+        }
+
+        /* 视图切换按钮 */
+        .view-btn {
+            padding: 6px;
+            border-radius: 4px;
+            background: none;
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            transition: all 0.2s;
+        }
+
+        .view-btn:hover {
+            background: var(--hover-bg);
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        .view-btn.active {
+            background: var(--hover-bg);
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        /* 搜索框样式 */
+        .search-box input {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+        }
+
+        .search-box input::placeholder {
+            color: var(--meta-text-color);
+        }
+
+        /* 加载状态 */
+        .loading-overlay {
+            background: var(--bg-color);
+            opacity: 0.9;
+        }
+
+        .loading-spinner {
+            border: 3px solid var(--border-color);
+            border-top: 3px solid var(--primary-color);
+        }
+
+        .loading-text {
+            color: var(--text-color);
         }
 
         @keyframes rotate {
@@ -138,9 +248,46 @@
         /* 提示信息样式 */
         .sync-tip {
             font-size: 12px;
-            color: #666;
+            color: var(--meta-text-color);
             margin-top: 4px;
             text-align: right;
+        }
+
+        /* 分组操作按钮 */
+        .group-actions button {
+            padding: 6px;
+            background: none;
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            color: var(--meta-text-color);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .group-actions button:hover {
+            background: var(--hover-bg);
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        .group-actions .delete-group-btn:hover {
+            background-color: rgba(220, 53, 69, 0.1);
+            color: #dc3545;
+            border-color: #dc3545;
+        }
+
+        /* 清除数据按钮 */
+        #clearData {
+            color: var(--text-color);
+        }
+
+        #clearData:hover {
+            background-color: rgba(220, 53, 69, 0.1);
+            color: #dc3545;
+            border-color: #dc3545;
         }
     </style>
 </head>

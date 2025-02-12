@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tabay",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "一个强大的标签页管理工具，帮助你更好地组织浏览器标签",
   "permissions": [
     "tabs",

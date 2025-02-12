@@ -45,6 +45,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 显示同步状态
         showSyncStatus(syncStatus);
 
+        // 监听系统主题变化
+        setupThemeListener();
+
     } catch (error) {
         console.error('初始化时出错：', error);
         showNotification('初始化时出错，请刷新页面重试');
@@ -964,43 +967,48 @@ function updateSyncStatus(status) {
 // 保存当前标签页
 async function saveCurrentTab() {
     try {
-        // 获取当前标签页
-        const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        
-        if (!currentTab) {
-            showNotification('没有找到当前标签页');
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!activeTab) {
+            showNotification('无法获取当前标签页信息', 'error');
             return;
         }
 
-        // 创建新标签组
-        const defaultName = `标签组 ${new Date().toLocaleString()}`;
-        const newGroup = new TabGroup(defaultName);
+        const tabItem = TabItem.createSafe(activeTab);
+        if (!tabItem) {
+            showNotification('当前页面类型不支持保存', 'warning');
+            return;
+        }
+
+        // 获取选中的分组
+        const selectedGroup = document.querySelector('input[name="group-select"]:checked');
+        if (!selectedGroup) {
+            showNotification('请先选择一个分组', 'warning');
+            return;
+        }
+
+        const groupId = selectedGroup.value;
+        const group = await TabGroup.get(groupId);
+        if (!group) {
+            showNotification('所选分组不存在', 'error');
+            return;
+        }
+
+        // 检查标签是否已存在
+        if (group.hasTab(activeTab.url)) {
+            showNotification('该标签页已在分组中', 'info');
+            return;
+        }
+
+        // 保存标签
+        await group.addTab(tabItem);
+        showNotification('标签页已保存', 'success');
         
-        // 创建标签项并添加到新组
-        const tabItem = new TabItem(currentTab);
-        newGroup.tabs.push(tabItem);
-        
-        // 将新分组添加到状态中
-        state.groups.unshift(newGroup);
-        
-        // 保存状态
-        updateSyncStatus('正在同步...');
-        await saveState();
-        
-        // 检查同步状态
-        const syncStatus = await checkSyncDataValidity();
-        showSyncStatus(syncStatus);
-        
-        // 重新渲染 UI
-        renderUI();
-        
-        // 显示成功提示
-        showNotification(`已保存到新标签组"${newGroup.name}"`);
+        // 刷新UI
+        await renderGroups();
         
     } catch (error) {
-        console.error('保存当前标签页时出错：', error);
-        showNotification('保存失败，请重试');
-        updateSyncStatus('同步失败');
+        console.error('保存标签时出错：', error);
+        showNotification(error.message || '保存标签时出错', 'error');
     }
 }
 
@@ -1093,4 +1101,21 @@ function clearDropTargets() {
     document.querySelectorAll('.tab-group.drop-target').forEach(group => {
         group.classList.remove('drop-target');
     });
+}
+
+// 监听系统主题变化
+function setupThemeListener() {
+    const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    
+    // 初始检查
+    handleThemeChange(darkModeMediaQuery);
+    
+    // 监听变化
+    darkModeMediaQuery.addEventListener('change', handleThemeChange);
+}
+
+// 处理主题变化
+function handleThemeChange(e) {
+    const isDarkMode = e.matches;
+    document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
 } 

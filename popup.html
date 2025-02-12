@@ -9,14 +9,49 @@
         #openFullPage {
             padding: 6px 12px;
             font-size: 13px;
-            color: var(--primary-color);
-            background: rgba(33, 150, 243, 0.1);
+            color: var(--text-color);
+            background: var(--hover-bg);
             border-radius: 4px;
             transition: all 0.2s;
+            border: 1px solid var(--border-color);
         }
 
         #openFullPage:hover {
-            background: rgba(33, 150, 243, 0.2);
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        /* 操作按钮样式 */
+        .btn {
+            padding: 8px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--hover-bg);
+            color: var(--text-color);
+        }
+
+        .btn.primary {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .btn.primary:hover {
+            opacity: 0.9;
+            background: var(--primary-color);
+        }
+
+        .btn:not(.primary):hover {
+            background: var(--hover-bg);
+            border-color: var(--primary-color);
+            color: var(--primary-color);
         }
 
         /* 同步状态样式 */
@@ -26,10 +61,11 @@
             gap: 4px;
             padding: 4px 8px;
             border-radius: 4px;
-            background-color: #f0f0f0;
-            color: #666;
+            background-color: var(--hover-bg);
+            color: var(--meta-text-color);
             font-size: 12px;
             margin-right: 8px;
+            border: 1px solid var(--border-color);
         }
 
         /* 同步图标旋转动画 */
@@ -46,17 +82,18 @@
         #clearData {
             padding: 4px 8px;
             border-radius: 4px;
-            background-color: #fff;
-            border: 1px solid #ddd;
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
             cursor: pointer;
             display: flex;
             align-items: center;
-            color: #666;
+            color: var(--meta-text-color);
         }
 
         #clearData:hover {
-            background-color: #f0f0f0;
-            color: #d32f2f;
+            background-color: rgba(220, 53, 69, 0.1);
+            color: #dc3545;
+            border-color: #dc3545;
         }
     </style>
 </head>
@@ -77,12 +114,6 @@
         </header>
 
         <div class="actions">
-            <button id="saveCurrentTab" class="btn primary" title="将当前标签页保存到新分组">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="margin-right: 6px;">
-                    <path d="M8.5 1.5A1.5 1.5 0 0 1 10 0h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h6c-.314.418-.5.937-.5 1.5v6.793L4.854 6.646a.5.5 0 1 0-.708.708l3.5 3.5a.5.5 0 0 0 .708 0l3.5-3.5a.5.5 0 0 0-.708-.708L8.5 8.293V1.5z"/>
-                </svg>
-                保存此页
-            </button>
             <button id="saveAllTabs" class="btn primary" title="将所有标签页保存到新分组">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="margin-right: 6px;">
                     <path d="M2 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H9.5a1 1 0 0 0-1 1v7.293l2.646-2.647a.5.5 0 0 1 .708.708l-3.5 3.5a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L7.5 9.293V2a2 2 0 0 1 2-2H14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h2.5a.5.5 0 0 1 0 1H2z"/>

@@ -27,32 +27,85 @@ class TabGroup {
 
 class TabItem {
     constructor(tab) {
-        if (!tab || !tab.url || !tab.title) {
-            throw new Error('无效的标签数据');
-        }
-
-        this.id = String(tab.id || Date.now());
+        this.id = tab.id?.toString() || Date.now().toString();
         this.url = tab.url;
         this.title = tab.title;
         this.favIconUrl = tab.favIconUrl || 'default-favicon.png';
-        this.createdAt = new Date().toISOString();
+        this.createdAt = tab.createdAt || new Date().toISOString();
     }
 
     static isValid(tab) {
-        return tab &&
-            typeof tab === 'object' &&
-            typeof tab.id === 'string' &&
-            typeof tab.url === 'string' &&
-            typeof tab.title === 'string' &&
-            typeof tab.createdAt === 'string';
+        return tab && 
+               typeof tab.url === 'string' && 
+               tab.url.trim() !== '' &&
+               typeof tab.title === 'string' &&
+               this.isValidUrl(tab.url);
+    }
+
+    static isValidUrl(url) {
+        if (!url || typeof url !== 'string') {
+            return false;
+        }
+
+        // 不支持的 URL 前缀列表
+        const unsupportedPrefixes = [
+            'chrome://',
+            'chrome-extension://',
+            'chrome-search://',
+            'chrome-devtools://',
+            'about:',
+            'edge://',
+            'view-source:',
+            'file://',
+            'data:',
+            'javascript:'
+        ];
+
+        // 检查是否是不支持的 URL
+        if (unsupportedPrefixes.some(prefix => url.toLowerCase().startsWith(prefix))) {
+            return false;
+        }
+
+        try {
+            // 尝试创建 URL 对象来验证 URL 格式
+            new URL(url);
+            return true;
+        } catch (error) {
+            return false;
+        }
     }
 
     static createSafe(tab) {
         try {
-            return new TabItem(tab);
+            // 基本参数检查
+            if (!tab) {
+                throw new Error('标签页数据无效');
+            }
+
+            if (!tab.url || typeof tab.url !== 'string') {
+                throw new Error('URL 无效');
+            }
+
+            if (!this.isValidUrl(tab.url)) {
+                throw new Error('不支持保存此类型的页面');
+            }
+
+            // 创建新的标签项
+            return new TabItem({
+                id: tab.id?.toString() || Date.now().toString(),
+                url: tab.url,
+                title: tab.title || '无标题',
+                favIconUrl: tab.favIconUrl || 'default-favicon.png',
+                createdAt: new Date().toISOString()
+            });
         } catch (error) {
-            console.warn('创建标签项时出错：', error);
-            return null;
+            console.warn('创建标签项时出错:', error);
+            return {
+                error: true,
+                message: error.message,
+                url: tab.url,
+                title: tab.title
+            };
         }
     }
 }

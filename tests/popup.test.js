@@ -2,20 +2,7 @@
  * @jest-environment jsdom
  */
 
-// 模拟 chrome API
-global.chrome = {
-    tabs: {
-        query: jest.fn(),
-        create: jest.fn(),
-        remove: jest.fn()
-    },
-    storage: {
-        sync: {
-            get: jest.fn(),
-            set: jest.fn()
-        }
-    }
-};
+// chrome API 由 tests/setup.js 统一 mock
 
 // 导入要测试的函数和类
 const {

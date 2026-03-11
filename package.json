@@ -4,6 +4,7 @@
   "description": "Chrome 标签管理扩展",
   "main": "popup.js",
   "scripts": {
+    "build:icons": "node scripts/build-icons.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
@@ -24,6 +25,7 @@
     "setupFiles": ["./tests/setup.js"]
   },
   "devDependencies": {
+    "sharp": "^0.33.0",
     "@babel/core": "^7.24.0",
     "@babel/preset-env": "^7.24.0",
     "babel-jest": "^29.7.0",

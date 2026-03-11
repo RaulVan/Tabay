@@ -1,10 +1,16 @@
 // 确保在页面加载时初始化数据
 document.addEventListener('DOMContentLoaded', async () => {
     try {
+        const versionEl = document.getElementById('appVersion');
+        if (versionEl && chrome.runtime && chrome.runtime.getManifest) {
+            versionEl.textContent = 'v' + chrome.runtime.getManifest().version;
+        }
+
         // 加载数据
         await loadState();
         // 设置全屏页面特有的事件监听器
         setupFullPageEventListeners();
+        setupDragAndDrop();
         // 渲染界面
         renderUI();
         // 更新统计信息
@@ -42,37 +48,7 @@ function setupViewListeners() {
     });
 }
 
-// 渲染单个标签页
-function renderTab(tab, groupId) {
-    const tabElement = document.createElement('div');
-    tabElement.className = 'tab-item';
-    tabElement.draggable = true;
-    tabElement.dataset.tabId = tab.id;
-    tabElement.dataset.groupId = groupId;
-    
-    tabElement.innerHTML = `
-        <img class="tab-favicon" src="${tab.favIconUrl || 'default-favicon.png'}" onerror="this.src='default-favicon.png'">
-        <div class="tab-content">
-            <div class="tab-title">${tab.title}</div>
-            <div class="tab-url">${tab.url}</div>
-        </div>
-        <div class="tab-actions">
-            <button class="open-tab-btn" data-url="${tab.url}" title="打开标签页">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M4.5 1h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2zm0 1a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1h-8z"/>
-                    <path d="M8.293 7.293a1 1 0 0 1 1.414 0l2 2a1 1 0 0 1-1.414 1.414L9 9.414V13a1 1 0 1 1-2 0V9.414L5.707 10.707a1 1 0 0 1-1.414-1.414l2-2a1 1 0 0 1 1.414 0z"/>
-                </svg>
-            </button>
-            <button class="delete-tab-btn" data-group-id="${groupId}" data-tab-id="${tab.id}" title="删除标签页">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
-                </svg>
-            </button>
-        </div>
-    `;
-    
-    return tabElement;
-}
+// renderTab 由 popup.js 提供（fullpage.html 先加载 popup.js）
 
 // 设置全屏页面特有的事件监听器
 function setupFullPageEventListeners() {
@@ -107,16 +83,14 @@ function setupFullPageEventListeners() {
             const reader = new FileReader();
             reader.onload = async (e) => {
                 try {
-                    const importedState = JSON.parse(e.target.result);
-                    if (importedState.groups) {
-                        state.groups = importedState.groups;
-                        state.searchQuery = importedState.searchQuery || '';
-                        await saveState();
+                    const importedData = JSON.parse(e.target.result);
+                    const result = await importData(importedData);
+                    if (result.success) {
                         renderUI();
                         updateStats();
-                        showNotification('数据导入成功！');
+                        showNotification(result.message);
                     } else {
-                        showNotification('无效的数据格式！');
+                        showNotification(result.message);
                     }
                 } catch (error) {
                     console.error('导入数据时出错：', error);

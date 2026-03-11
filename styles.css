@@ -826,4 +826,13 @@ h1 {
     text-align: center;
     padding: 32px;
     color: var(--meta-text-color);
+}
+
+/* 标题旁版本号：黑色、相对 h1 自适应字号 */
+.app-version {
+    color: #000;
+    font-size: 0.5em;
+    font-weight: 400;
+    vertical-align: middle;
+    margin-left: 6px;
 } 

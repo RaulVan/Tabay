@@ -4,6 +4,12 @@
 // 初始化
 document.addEventListener('DOMContentLoaded', async () => {
     try {
+        // 标题旁版本号（manifest.version）
+        const versionEl = document.getElementById('appVersion');
+        if (versionEl && chrome.runtime && chrome.runtime.getManifest) {
+            versionEl.textContent = 'v' + chrome.runtime.getManifest().version;
+        }
+
         // 显示加载状态
         const loadingDiv = document.createElement('div');
         loadingDiv.className = 'loading-overlay';
@@ -54,157 +60,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// 加载状态
-async function loadState() {
-    try {
-        const result = await chrome.storage.sync.get('tabManagerState');
-        const mainState = result.tabManagerState;
-        
-        if (!mainState) {
-            console.log('没有找到已保存的状态');
-            return;
-        }
-
-        // 获取块数量
-        const { chunkCount = 0 } = await chrome.storage.sync.get('chunkCount');
-        
-        // 加载所有数据块
-        const chunks = [];
-        for (let i = 0; i < chunkCount; i++) {
-            try {
-                const { [`chunk_${i}`]: chunk } = await chrome.storage.sync.get(`chunk_${i}`);
-                if (Array.isArray(chunk)) {
-                    chunks.push(chunk);
-                } else {
-                    console.warn(`数据块 ${i} 无效，使用空数组代替`);
-                    chunks.push([]);
-                }
-            } catch (error) {
-                console.warn(`加载数据块 ${i} 时出错：`, error);
-                chunks.push([]);
-            }
-        }
-        
-        // 重建完整的状态对象
-        state.searchQuery = mainState.searchQuery || '';
-        state.groups = mainState.groups.map(group => {
-            try {
-                // 验证分组基本信息
-                if (!group || typeof group !== 'object') {
-                    console.warn('无效的分组数据');
-                    return null;
-                }
-
-                // 重建标签数组
-                const tabs = [];
-                if (Array.isArray(group.tabs)) {
-                    group.tabs.forEach(tabRef => {
-                        try {
-                            if (tabRef && 
-                                typeof tabRef.chunkIndex === 'number' && 
-                                typeof tabRef.count === 'number' &&
-                                tabRef.chunkIndex >= 0 && 
-                                tabRef.chunkIndex < chunks.length) {
-                                
-                                const chunk = chunks[tabRef.chunkIndex];
-                                if (Array.isArray(chunk) && chunk.length > 0) {
-                                    const validTabs = chunk
-                                        .slice(0, Math.min(tabRef.count, chunk.length))
-                                        .filter(tab => tab && tab.url && tab.title);
-                                    tabs.push(...validTabs);
-                                }
-                            }
-                        } catch (error) {
-                            console.warn('处理标签引用时出错：', error);
-                        }
-                    });
-                }
-
-                return {
-                    id: group.id || Date.now().toString(),
-                    name: group.name || '未命名分组',
-                    tabs: tabs,
-                    createdAt: group.createdAt || new Date().toISOString()
-                };
-            } catch (error) {
-                console.warn('处理分组时出错：', error);
-                return null;
-            }
-        }).filter(group => group !== null); // 移除无效的分组
-
-    } catch (error) {
-        console.error('加载状态时出错：', error);
-        // 确保状态被重置为有效值
-        state.searchQuery = '';
-        state.groups = [];
-        throw error;
-    }
-}
-
-// 保存状态
-async function saveState() {
-    try {
-        // 将大型数据结构分片存储
-        const chunks = [];
-        const groupChunks = [];
-        const CHUNK_SIZE = 6000; // 设置较小的块大小，预留一些空间给其他数据
-        
-        // 分割标签组数据
-        state.groups.forEach((group, groupIndex) => {
-            const tabs = [];
-            let currentChunk = [];
-            
-            group.tabs.forEach((tab, tabIndex) => {
-                currentChunk.push(tab);
-                
-                // 当前块接近限制或是最后一个标签时，创建新块
-                if (JSON.stringify(currentChunk).length >= CHUNK_SIZE || tabIndex === group.tabs.length - 1) {
-                    if (currentChunk.length > 0) {
-                        tabs.push({
-                            chunkIndex: chunks.length,
-                            count: currentChunk.length
-                        });
-                        chunks.push(currentChunk);
-                        currentChunk = [];
-                    }
-                }
-            });
-            
-            // 存储分组信息，但不包含具体的标签数据
-            groupChunks.push({
-                ...group,
-                tabs: tabs // 只存储引用信息
-            });
-        });
-        
-        // 保存主状态对象（不包含具体的标签数据）
-        const mainState = {
-            groups: groupChunks,
-            searchQuery: state.searchQuery
-        };
-        
-        // 清理旧数据
-        const oldChunkCount = (await chrome.storage.sync.get('chunkCount')).chunkCount || 0;
-        for (let i = 0; i < oldChunkCount; i++) {
-            await chrome.storage.sync.remove(`chunk_${i}`);
-        }
-        
-        // 保存主状态
-        await chrome.storage.sync.set({ 'tabManagerState': mainState });
-        
-        // 保存数据块
-        for (let i = 0; i < chunks.length; i++) {
-            await chrome.storage.sync.set({ [`chunk_${i}`]: chunks[i] });
-        }
-        
-        // 保存块数量信息
-        await chrome.storage.sync.set({ 'chunkCount': chunks.length });
-        
-    } catch (error) {
-        console.error('保存状态时出错：', error);
-        throw error;
-    }
-}
+// loadState / saveState 由 state.js 提供（统一压缩与备份）
 
 // 设置事件监听器
 function setupEventListeners() {
@@ -459,40 +315,47 @@ async function saveAllTabs() {
         // 显示并更新保存进度
         const { progressDiv, updateProgress } = showProgressDialog(tabs.length);
         
-        // 批量保存标签页
+        let savedCount = 0;
+        const skippedTabs = [];
+
         for (let i = 0; i < tabs.length; i++) {
             const tab = tabs[i];
-            const tabItem = new TabItem(tab);
-            targetGroup.tabs.push(tabItem);
-            
-            // 更新进度
+            const result = TabItem.createSafe(tab);
+            if (result && result.error) {
+                skippedTabs.push({
+                    title: tab.title || '无标题',
+                    url: tab.url,
+                    reason: result.message || '不支持保存此类型的页面'
+                });
+            } else {
+                targetGroup.tabs.push(result);
+                savedCount++;
+            }
             updateProgress(i + 1);
-            
-            // 等待一小段时间，让用户看到进度
             await new Promise(resolve => setTimeout(resolve, 50));
         }
 
-        // 将新分组添加到状态中
+        if (savedCount === 0) {
+            progressDiv.remove();
+            showNotification('没有可保存的标签页，当前窗口均为不支持的页面类型');
+            return;
+        }
+
         state.groups.unshift(targetGroup);
-        
-        // 保存状态（使用分片存储）
         await saveState();
-        
-        // 更新同步状态
+
         updateSyncStatus('正在同步...');
-        
-        // 等待同步完成
         await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // 检查同步状态
         const syncStatus = await checkSyncDataValidity();
         showSyncStatus(syncStatus);
-        
-        // 移除进度条
+
         progressDiv.remove();
-        
-        // 显示成功提示
-        showNotification(`成功保存了 ${tabs.length} 个标签页到"${targetGroup.name}"`);
+
+        let message = `成功保存了 ${savedCount} 个标签页到"${targetGroup.name}"`;
+        if (skippedTabs.length > 0) {
+            message += `，${skippedTabs.length} 个已跳过`;
+        }
+        showNotification(message);
 
         // 发送消息给后台脚本，让它处理关闭标签和打开新页面的操作
         chrome.runtime.sendMessage({
@@ -679,6 +542,9 @@ function renderGroup(group) {
     groupElement.className = 'tab-group';
     groupElement.dataset.groupId = group.id;
 
+    // 属性内插值转义，防止恶意 group.id 破坏 HTML
+    const safeGroupIdAttr = String(group.id || '').replace(/"/g, '&quot;');
+
     const headerContent = `
         <div class="group-header">
             <div class="group-header-content">
@@ -688,8 +554,8 @@ function renderGroup(group) {
                     </svg>
                 </div>
                 <div class="title-container">
-                    <div class="group-title" data-group-id="${group.id}">
-                        <span class="title-text">${group.name}</span>
+                    <div class="group-title" data-group-id="${safeGroupIdAttr}">
+                        <span class="title-text">${escapeHtml(group.name)}</span>
                         <button class="edit-title-btn" title="编辑名称">
                             <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
                                 <path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708l-3-3zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.499.499 0 0 1-.175-.032l-.179.178a.5.5 0 0 0-.11.168l-2 5a.5.5 0 0 0 .65.65l5-2a.5.5 0 0 0 .168-.11l.178-.178z"/>
@@ -701,13 +567,13 @@ function renderGroup(group) {
                     </div>
                 </div>
                 <div class="group-actions">
-                    <button class="open-all-tabs-btn" title="打开所有标签" data-group-id="${group.id}">
+                    <button class="open-all-tabs-btn" title="打开所有标签" data-group-id="${safeGroupIdAttr}">
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                             <path d="M4.5 9a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5zM4 10.5a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5zm.5 1.5a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1h-7z"/>
                             <path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h-2z"/>
                         </svg>
                     </button>
-                    <button class="delete-group-btn" title="删除分组" data-group-id="${group.id}">
+                    <button class="delete-group-btn" title="删除分组" data-group-id="${safeGroupIdAttr}">
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                             <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
                             <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
@@ -739,20 +605,21 @@ function renderTab(tab, groupId) {
     tabElement.dataset.tabId = tab.id;
     tabElement.dataset.groupId = groupId;
     
+    const safeUrlAttr = String(tab.url || '').replace(/"/g, '&quot;');
     tabElement.innerHTML = `
-        <img class="tab-favicon" src="${tab.favIconUrl || 'default-favicon.png'}" onerror="this.src='default-favicon.png'">
+        <img class="tab-favicon" src="${(tab.favIconUrl || 'default-favicon.png').replace(/"/g, '&quot;')}" onerror="this.src='default-favicon.png'">
         <div class="tab-content">
-            <div class="tab-title">${tab.title}</div>
-            <div class="tab-url">${tab.url}</div>
+            <div class="tab-title">${escapeHtml(tab.title)}</div>
+            <div class="tab-url">${escapeHtml(tab.url)}</div>
         </div>
         <div class="tab-actions">
-            <button class="open-tab-btn" data-url="${tab.url}" title="打开标签页">
+            <button class="open-tab-btn" data-url="${safeUrlAttr}" title="打开标签页">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                     <path d="M4.5 1h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2zm0 1a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1h-8z"/>
                     <path d="M8.293 7.293a1 1 0 0 1 1.414 0l2 2a1 1 0 0 1-1.414 1.414L9 9.414V13a1 1 0 1 1-2 0V9.414L5.707 10.707a1 1 0 0 1-1.414-1.414l2-2a1 1 0 0 1 1.414 0z"/>
                 </svg>
             </button>
-            <button class="delete-tab-btn" data-group-id="${groupId}" data-tab-id="${tab.id}" title="删除标签页">
+            <button class="delete-tab-btn" data-group-id="${String(groupId || '').replace(/"/g, '&quot;')}" data-tab-id="${String(tab.id || '').replace(/"/g, '&quot;')}" title="删除标签页">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                     <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
                 </svg>
@@ -763,136 +630,7 @@ function renderTab(tab, groupId) {
     return tabElement;
 }
 
-// 创建分组元素的 HTML
-function createGroupElementHTML(group) {
-    return `
-        <div class="tab-group" data-group-id="${group.id}">
-            <div class="group-header">
-                <div class="group-header-content">
-                    <div>
-                        <div class="group-title">${group.name}</div>
-                        <div class="group-meta">
-                            ${group.tabs.length} 个标签页 · 
-                            ${formatDate(group.createdAt)}
-                        </div>
-                    </div>
-                    <div class="group-actions">
-                        <button class="open-all-tabs-btn" data-group-id="${group.id}" title="打开所有标签">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                                    <path d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/>
-                                    <path d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/>
-                            </svg>
-                        </button>
-                        <button class="delete-group-btn" data-group-id="${group.id}" title="删除分组">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                                <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
-                                <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4L4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-            </div>
-            <div class="tab-list">
-                ${group.tabs.map(tab => `
-                    <div class="tab-item" data-group-id="${group.id}" data-tab-id="${tab.id}">
-                        <img src="${tab.favIconUrl || 'default-favicon.png'}" class="tab-favicon" 
-                             onerror="this.src='default-favicon.png'">
-                        <div class="tab-content">
-                            <div class="tab-title">${tab.title}</div>
-                            <div class="tab-url">${tab.url}</div>
-                        </div>
-                        <div class="tab-actions">
-                            <button class="open-tab-btn" data-url="${tab.url}" title="打开">
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                                    <path d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/>
-                                    <path d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/>
-                                </svg>
-                            </button>
-                            <button class="delete-tab-btn" data-group-id="${group.id}" data-tab-id="${tab.id}" title="删除">
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                                    <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-    `;
-}
-
-// 按时间分组
-function groupByTime(groups) {
-    const now = new Date();
-    const timeGroups = {
-        '今天': [],
-        '昨天': [],
-        '本周': [],
-        '本月': [],
-        '更早': []
-    };
-    
-    groups.forEach(group => {
-        const createdAt = new Date(group.createdAt);
-        const diffDays = Math.floor((now - createdAt) / (1000 * 60 * 60 * 24));
-        
-        if (diffDays === 0) {
-            timeGroups['今天'].push(group);
-        } else if (diffDays === 1) {
-            timeGroups['昨天'].push(group);
-        } else if (diffDays <= 7) {
-            timeGroups['本周'].push(group);
-        } else if (diffDays <= 30) {
-            timeGroups['本月'].push(group);
-        } else {
-            timeGroups['更早'].push(group);
-        }
-    });
-    
-    // 移除空的时间组
-    Object.keys(timeGroups).forEach(key => {
-        if (timeGroups[key].length === 0) {
-            delete timeGroups[key];
-        }
-    });
-    
-    return timeGroups;
-}
-
-// 格式化日期
-function formatDate(dateString) {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    
-    if (diffMins < 60) {
-        return `${diffMins} 分钟前`;
-    } else if (diffHours < 24) {
-        return `${diffHours} 小时前`;
-    } else if (diffDays < 30) {
-        return `${diffDays} 天前`;
-    } else {
-        return date.toLocaleDateString();
-    }
-}
-
-// 过滤分组
-function filterGroups() {
-    if (!state.searchQuery) {
-        return state.groups;
-    }
-    
-    return state.groups.map(group => ({
-        ...group,
-        tabs: group.tabs.filter(tab => 
-            tab.title.toLowerCase().includes(state.searchQuery) ||
-            tab.url.toLowerCase().includes(state.searchQuery)
-        )
-    })).filter(group => group.tabs.length > 0);
-}
+// groupByTime / formatDate / filterGroups 由 state.js 提供，避免重复定义
 
 // 导出函数
 if (typeof window !== 'undefined') {
@@ -905,10 +643,6 @@ if (typeof window !== 'undefined') {
         openTab,
         deleteTab,
         renderUI,
-        createGroupElementHTML,
-        groupByTime,
-        formatDate,
-        filterGroups,
         showGroupSelector,
         showProgressDialog,
         updateProgress: (progressDiv, current, total) => {
@@ -922,8 +656,16 @@ if (typeof window !== 'undefined') {
     });
 }
 
-// 为 Node.js 环境导出
+// 为 Node.js 环境导出（工具函数从 state.js 引入，与浏览器中 state.js 先加载一致）
 if (typeof module !== 'undefined' && module.exports) {
+    const stateExports = require('./state.js');
+    const updateProgressImpl = (progressDiv, current, total) => {
+        const progress = (current / total) * 100;
+        const progressFill = progressDiv.querySelector('.progress-fill');
+        const progressText = progressDiv.querySelector('.progress-text');
+        progressFill.style.width = `${progress}%`;
+        progressText.textContent = `${current}/${total}`;
+    };
     module.exports = {
         setupEventListeners,
         setupEventDelegation,
@@ -933,19 +675,12 @@ if (typeof module !== 'undefined' && module.exports) {
         openTab,
         deleteTab,
         renderUI,
-        createGroupElementHTML,
-        groupByTime,
-        formatDate,
-        filterGroups,
+        groupByTime: stateExports.groupByTime,
+        formatDate: stateExports.formatDate,
+        filterGroups: stateExports.filterGroups,
         showGroupSelector,
         showProgressDialog,
-        updateProgress: (progressDiv, current, total) => {
-            const progress = (current / total) * 100;
-            const progressFill = progressDiv.querySelector('.progress-fill');
-            const progressText = progressDiv.querySelector('.progress-text');
-            progressFill.style.width = `${progress}%`;
-            progressText.textContent = `${current}/${total}`;
-        },
+        updateProgress: updateProgressImpl,
         renderTab,
     };
 }
@@ -964,51 +699,46 @@ function updateSyncStatus(status) {
     }
 }
 
-// 保存当前标签页
+// 保存当前标签页（需页面存在 group-select 与 saveCurrentTab 按钮）
 async function saveCurrentTab() {
     try {
         const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (!activeTab) {
-            showNotification('无法获取当前标签页信息', 'error');
+            showNotification('无法获取当前标签页信息');
             return;
         }
 
         const tabItem = TabItem.createSafe(activeTab);
-        if (!tabItem) {
-            showNotification('当前页面类型不支持保存', 'warning');
+        if (tabItem && tabItem.error) {
+            showNotification(tabItem.message || '当前页面类型不支持保存');
             return;
         }
 
-        // 获取选中的分组
         const selectedGroup = document.querySelector('input[name="group-select"]:checked');
         if (!selectedGroup) {
-            showNotification('请先选择一个分组', 'warning');
+            showNotification('请先选择一个分组');
             return;
         }
 
         const groupId = selectedGroup.value;
-        const group = await TabGroup.get(groupId);
+        const group = state.groups.find(g => g.id === groupId);
         if (!group) {
-            showNotification('所选分组不存在', 'error');
+            showNotification('所选分组不存在');
             return;
         }
 
-        // 检查标签是否已存在
-        if (group.hasTab(activeTab.url)) {
-            showNotification('该标签页已在分组中', 'info');
+        if (group.tabs.some(t => t.url === activeTab.url)) {
+            showNotification('该标签页已在分组中');
             return;
         }
 
-        // 保存标签
-        await group.addTab(tabItem);
-        showNotification('标签页已保存', 'success');
-        
-        // 刷新UI
-        await renderGroups();
-        
+        group.tabs.push(tabItem);
+        await saveState();
+        renderUI();
+        showNotification('标签页已保存');
     } catch (error) {
-        console.error('保存标签时出错：', error);
-        showNotification(error.message || '保存标签时出错', 'error');
+        console.error('保存标签页时出错：', error);
+        showNotification(error.message || '保存标签页时出错');
     }
 }
 
@@ -1070,24 +800,24 @@ function setupDragAndDrop() {
         if (targetGroupId === sourceGroupId) return;
 
         try {
-            // 从源组中移除标签
+            // 从源组中移除标签（内层用 targetGroupObj 避免与外层 DOM targetGroup 遮蔽）
             const sourceGroup = state.groups.find(g => g.id === sourceGroupId);
-            const targetGroup = state.groups.find(g => g.id === targetGroupId);
+            const targetGroupObj = state.groups.find(g => g.id === targetGroupId);
             
-            if (!sourceGroup || !targetGroup) return;
+            if (!sourceGroup || !targetGroupObj) return;
 
             const tabIndex = sourceGroup.tabs.findIndex(t => t.id === draggedTab.id);
             if (tabIndex === -1) return;
 
             const [movedTab] = sourceGroup.tabs.splice(tabIndex, 1);
-            targetGroup.tabs.push(movedTab);
+            targetGroupObj.tabs.push(movedTab);
 
             // 保存状态并重新渲染
             await saveState();
             renderUI();
             
             // 显示成功提示
-            showNotification(`标签页已移动到"${targetGroup.name}"`);
+            showNotification(`标签页已移动到"${targetGroupObj.name}"`);
         } catch (error) {
             console.error('移动标签页时出错：', error);
             showNotification('移动标签页失败，请重试');

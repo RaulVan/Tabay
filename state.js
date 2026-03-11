@@ -103,8 +103,8 @@ class TabItem {
             return {
                 error: true,
                 message: error.message,
-                url: tab.url,
-                title: tab.title
+                url: tab && tab.url,
+                title: tab && tab.title
             };
         }
     }
@@ -120,14 +120,26 @@ const state = {
 async function loadState() {
     try {
         console.log('开始加载状态...');
-        
-        // 尝试从主存储加载
-        const result = await chrome.storage.sync.get(['tabManagerState', 'chunkCount', 'lastBackup']);
-        const mainState = result.tabManagerState;
+
+        const result = await chrome.storage.sync.get([
+            'tabManagerState', 'chunkCount', 'lastBackup', 'isCompressed'
+        ]);
+        let mainState = result.tabManagerState;
         const lastBackup = result.lastBackup;
-        
-        // 检查主状态
-        if (!mainState || !Array.isArray(mainState?.groups)) {
+
+        // 主状态为字符串时表示 gzip+base64 压缩
+        if (mainState && typeof mainState === 'string') {
+            const decompressed = await decompressData(mainState);
+            if (decompressed && Array.isArray(decompressed.groups)) {
+                mainState = decompressed;
+            } else {
+                console.warn('解压主状态失败，尝试备份恢复');
+                mainState = null;
+            }
+        }
+
+        // 检查主状态（未压缩时为对象，groups 为分块引用数组）
+        if (!mainState || !Array.isArray(mainState.groups)) {
             console.log('主状态无效，尝试从备份恢复...');
             if (lastBackup && lastBackup.state) {
                 console.log('找到可用备份，正在恢复...');
@@ -160,7 +172,11 @@ async function loadState() {
         
         for (let i = 0; i < chunkCount; i++) {
             try {
-                const { [`chunk_${i}`]: chunk } = await chrome.storage.sync.get(`chunk_${i}`);
+                const { [`chunk_${i}`]: rawChunk } = await chrome.storage.sync.get(`chunk_${i}`);
+                let chunk = rawChunk;
+                if (chunk && typeof chunk === 'string') {
+                    chunk = await decompressData(chunk);
+                }
                 if (Array.isArray(chunk)) {
                     chunks.push(chunk);
                 } else {
@@ -308,33 +324,39 @@ async function saveState() {
             await chrome.storage.sync.remove(`chunk_${i}`);
         }
 
-        // 压缩主状态数据
         const mainState = {
             groups: groupChunks,
             searchQuery: state.searchQuery || ''
         };
         const compressedMainState = await compressData(mainState);
-        
-        // 保存压缩后的主状态
-        await chrome.storage.sync.set({ 
-            'tabManagerState': compressedMainState,
-            'isCompressed': true
-        });
-        
-        // 分批压缩和保存数据块
-        const BATCH_SIZE = 3;
-        for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
-            const batch = {};
-            const end = Math.min(i + BATCH_SIZE, chunks.length);
-            for (let j = i; j < end; j++) {
-                const compressedChunk = await compressData(chunks[j]);
-                batch[`chunk_${j}`] = compressedChunk;
+
+        if (compressedMainState) {
+            await chrome.storage.sync.set({
+                tabManagerState: compressedMainState,
+                isCompressed: true
+            });
+            const BATCH_SIZE = 3;
+            for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+                const batch = {};
+                const end = Math.min(i + BATCH_SIZE, chunks.length);
+                for (let j = i; j < end; j++) {
+                    const compressedChunk = await compressData(chunks[j]);
+                    batch[`chunk_${j}`] = compressedChunk != null ? compressedChunk : chunks[j];
+                }
+                await chrome.storage.sync.set(batch);
             }
-            await chrome.storage.sync.set(batch);
+        } else {
+            // CompressionStream 不可用时回退为未压缩分块（与旧版 popup 行为一致）
+            await chrome.storage.sync.set({
+                tabManagerState: mainState,
+                isCompressed: false
+            });
+            for (let i = 0; i < chunks.length; i++) {
+                await chrome.storage.sync.set({ [`chunk_${i}`]: chunks[i] });
+            }
         }
-        
-        // 保存块数量信息
-        await chrome.storage.sync.set({ 'chunkCount': chunks.length });
+
+        await chrome.storage.sync.set({ chunkCount: chunks.length });
         
         console.log(`保存完成：${chunks.length} 个数据块，${groupChunks.length} 个分组`);
         
@@ -376,6 +398,23 @@ async function restoreFromBackup(backup) {
         console.error('从备份恢复时出错：', error);
     }
     return false;
+}
+
+// 对用户可控文本做 HTML 转义，避免 innerHTML 拼接导致 XSS
+function escapeHtml(str) {
+    if (str == null || typeof str !== 'string') {
+        return '';
+    }
+    if (typeof document === 'undefined') {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
 }
 
 // 显示通知
@@ -469,17 +508,32 @@ function groupByTime(groups) {
     return timeGroups;
 }
 
+// 存储中的分组结构校验（tabs 可为 chunk 引用数组，非 TabItem 数组）
+function isValidGroupRef(group) {
+    return group &&
+        typeof group === 'object' &&
+        typeof group.id === 'string' &&
+        typeof group.name === 'string' &&
+        Array.isArray(group.tabs) &&
+        typeof group.createdAt === 'string';
+}
+
 // 检查同步数据有效性
 async function checkSyncDataValidity() {
     try {
-        const result = await chrome.storage.sync.get(['tabManagerState', 'chunkCount', 'lastBackup']);
-        const mainState = result.tabManagerState;
+        const result = await chrome.storage.sync.get([
+            'tabManagerState', 'chunkCount', 'lastBackup', 'isCompressed'
+        ]);
+        let mainState = result.tabManagerState;
         const chunkCount = result.chunkCount || 0;
         const lastBackup = result.lastBackup;
-        
+
+        if (mainState && typeof mainState === 'string') {
+            mainState = await decompressData(mainState);
+        }
+
         console.log('开始检查同步数据有效性...');
-        
-        // 检查主状态
+
         if (!mainState || !Array.isArray(mainState.groups)) {
             console.error('主状态无效或不存在');
             return {
@@ -489,11 +543,14 @@ async function checkSyncDataValidity() {
             };
         }
 
-        // 检查数据块
         let validChunks = 0;
         let invalidChunks = 0;
         for (let i = 0; i < chunkCount; i++) {
-            const { [`chunk_${i}`]: chunk } = await chrome.storage.sync.get(`chunk_${i}`);
+            const { [`chunk_${i}`]: raw } = await chrome.storage.sync.get(`chunk_${i}`);
+            let chunk = raw;
+            if (chunk && typeof chunk === 'string') {
+                chunk = await decompressData(chunk);
+            }
             if (Array.isArray(chunk) && chunk.length > 0) {
                 validChunks++;
             } else {
@@ -501,16 +558,21 @@ async function checkSyncDataValidity() {
             }
         }
 
-        // 检查分组数据完整性
         let validGroups = 0;
         let invalidGroups = 0;
         let totalTabs = 0;
-        
+
         mainState.groups.forEach(group => {
-            if (TabGroup.isValid(group)) {
+            if (isValidGroupRef(group)) {
                 validGroups++;
                 if (Array.isArray(group.tabs)) {
-                    totalTabs += group.tabs.length;
+                    group.tabs.forEach(ref => {
+                        if (ref && typeof ref.chunkIndex === 'number' && typeof ref.count === 'number') {
+                            totalTabs += ref.count;
+                        } else {
+                            totalTabs += 1;
+                        }
+                    });
                 }
             } else {
                 invalidGroups++;
@@ -571,13 +633,18 @@ async function getStorageUsage() {
 // 显示同步状态通知
 function showSyncStatus(status) {
     let message = '';
-    if (status.isValid) {
-        message = `数据正常：${status.details.validGroups} 个分组，${status.details.totalTabs} 个标签，存储使用 ${status.details.storageUsage.percent}%`;
-    } else {
+    if (status.isValid && status.details && typeof status.details === 'object') {
+        const pct = status.details.storageUsage && status.details.storageUsage.percent != null
+            ? status.details.storageUsage.percent
+            : '0';
+        message = `数据正常：${status.details.validGroups} 个分组，${status.details.totalTabs} 个标签，存储使用 ${pct}%`;
+    } else if (!status.isValid && status.details && typeof status.details === 'object') {
         message = `数据异常：${status.details.invalidGroups} 个无效分组，${status.details.invalidChunks} 个损坏数据块`;
         if (status.hasBackup) {
             message += '，但存在可用备份';
         }
+    } else {
+        message = typeof status.details === 'string' ? status.details : '同步状态未知';
     }
     showNotification(message, 5000);
 }
@@ -820,6 +887,7 @@ if (typeof window !== 'undefined') {
         loadState,
         saveState,
         showNotification,
+        escapeHtml,
         formatDate,
         filterGroups,
         groupByTime,
@@ -829,7 +897,10 @@ if (typeof window !== 'undefined') {
         clearSyncData,
         importData,
         compressData,
-        decompressData
+        decompressData,
+        restoreFromBackup,
+        createBackup,
+        isValidGroupRef
     });
 }
 
@@ -842,6 +913,7 @@ if (typeof module !== 'undefined' && module.exports) {
         loadState,
         saveState,
         showNotification,
+        escapeHtml,
         formatDate,
         filterGroups,
         groupByTime,
@@ -851,6 +923,9 @@ if (typeof module !== 'undefined' && module.exports) {
         clearSyncData,
         importData,
         compressData,
-        decompressData
+        decompressData,
+        restoreFromBackup,
+        createBackup,
+        isValidGroupRef
     };
 } 
